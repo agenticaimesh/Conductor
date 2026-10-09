@@ -1,0 +1,28 @@
+name: unpack-update
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Unpack the zip
+        run: |
+          test -f Conductor-update.zip || { echo "Conductor-update.zip is not in the repo root. Upload it first."; exit 1; }
+          unzip -o Conductor-update.zip -x '.github/*' 'wrangler.toml' 'README.md' 'CHANGES.md'
+          rm Conductor-update.zip
+      - name: Run the tests
+        run: node tests/run-all.mjs
+      - name: Save the update
+        run: |
+          rm -rf tests/.tmp
+          git config user.name "unpack-update"
+          git config user.email "unpack-update@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply Conductor-update.zip" || echo "nothing changed"
+          git push

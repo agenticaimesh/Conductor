@@ -1,0 +1,22 @@
+import { decompose } from "../src/decompose.js";
+import { R, suite } from "./lib.mjs";
+const { ok, done } = suite();
+const bad = { user_inputs: [], subgoals: [{ id: "sg1", title: "A", does: "a", inputs: [{ name: "x", type: "string", from: "user.x" }], outputs: [{ name: "o", type: "string" }], final: true }] };
+const good = { user_inputs: [{ name: "x", type: "string" }], subgoals: [{ id: "sg1", title: "A", does: "a", inputs: [{ name: "x", type: "string", from: "user.x" }], outputs: [{ name: "o", type: "string" }], final: true }] };
+let replies = [bad, good], prompts = [];
+globalThis.fetch = async (url, o = {}) => {
+  url = String(url);
+  if (url.endsWith("/models")) return R({ data: [{ id: "openai/gpt-oss-120b" }, { id: "whisper-large-v3" }] });
+  const b = JSON.parse(o.body); prompts.push({ model: b.model, user: b.messages[1].content });
+  return R({ choices: [{ message: { content: "```json\n" + JSON.stringify(replies.shift()) + "\n```" } }] });
+};
+const env = { GROQ_API_KEY: "g" };
+let r = await decompose(env, "do a thing", [{ id: "m1", does: "d", status: "proven", inputs: [{ name: "x" }], outputs: [{ name: "o" }] }]);
+ok(!r.draft && r.check.ok && r.trace.length === 2, "a bad first split is sent back with its errors and the second try passes");
+ok(prompts[1].user.includes("not a declared user input"), "the exact errors are given to the model");
+ok(prompts[0].user.includes('"id":"m1"') && !prompts.some((p) => p.model.includes("whisper")), "existing modules are offered; non-chat models are never used");
+replies = [bad, bad, bad]; r = await decompose(env, "g", []);
+ok(r.draft && !r.check.ok, "after 3 failed tries it is returned as a labelled draft, never as ok");
+globalThis.fetch = async () => R({}, 500); r = await decompose({}, "g", []);
+ok(r.plan === null && /no LLM key/.test(r.trace[0]), "no key gives a clear message");
+done();
