@@ -18,7 +18,7 @@ const PAGE = `<!doctype html><meta name=viewport content="width=device-width,ini
 <label><input type=checkbox id=ac> also use candidate modules</label><br><br>
 <button id=dc>1. Split the goal</button> <button id=mj>2. Make job</button> <button id=ad>3. Advance</button> <button id=sj>Show job</button> <button id=rs>Resume</button><br><br>
 <input id=jid placeholder="job id" style="padding:6px;width:46%"> <input id=pid placeholder="split id" style="padding:6px;width:46%"><br><br>
-<button id=im>Import builder recipes</button> <button id=ml>Modules</button> <input id=mid placeholder="module id" style="padding:6px;width:30%"> <button id=mp>Mark proven</button> <button id=ms>Mark stale</button>
+<button id=bc>Check builder link</button> <button id=im>Import builder recipes</button> <button id=ml>Modules</button> <input id=mid placeholder="module id" style="padding:6px;width:30%"> <button id=mp>Mark proven</button> <button id=ms>Mark stale</button>
 <pre id=o style="white-space:pre-wrap;background:#f4f4f4;padding:8px;margin-top:12px;min-height:60px"></pre>
 <script>
 const $=i=>document.getElementById(i);t.value=localStorage.ct||"";
@@ -31,6 +31,7 @@ mj.onclick=()=>{const v=vals();if(!v)return;call("/job","POST",{plan_id:pid.valu
 ad.onclick=()=>call("/job/"+jid.value.trim()+"/advance","POST",{});
 sj.onclick=()=>call("/job/"+jid.value.trim(),"GET");
 rs.onclick=()=>call("/job/"+jid.value.trim()+"/resume","POST",{});
+bc.onclick=()=>call("/builder/check","GET");
 im.onclick=()=>call("/modules/import","POST",{});
 ml.onclick=()=>call("/modules","GET");
 mp.onclick=()=>call("/module/"+mid.value.trim()+"/status","POST",{status:"proven"});
@@ -84,6 +85,7 @@ export default {
         const m = await listModules(env);
         return J({ count: m.length, modules: m.map((x) => ({ id: x.id, status: x.status, does: x.does, inputs: x.inputs.map((i) => i.name), outputs: x.outputs.map((o) => o.name), effects: x.effects, proof: `${x.proof.ok_runs}/${x.proof.real_runs} ok, ${x.proof.ok_inputs.length} different inputs`, notes: x.notes })) });
       }
+      if (req.method === "GET" && u.pathname === "/builder/check") return J(await builder(env).check());
       if (req.method === "POST" && u.pathname === "/modules/import") return J(await importRecipes(env, builder(env)));
       if (parts[0] === "module" && parts[1]) {
         const m = await getModule(env, parts[1]); if (!m) return J({ error: "module not found" }, 404);

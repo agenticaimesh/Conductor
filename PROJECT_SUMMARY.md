@@ -1,6 +1,6 @@
 # Conductor - project handoff
 
-Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-09 (Conductor zip 1). Every Conductor-update.zip carries a refreshed copy of this file.
+Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-09 (Conductor zip 2). Every Conductor-update.zip carries a refreshed copy of this file.
 
 ## 1. What it is
 A SEPARATE Cloudflare Worker (free plan, KV binding CONDUCTOR, cron every 5 minutes) that sits above the existing Stack Builder worker ("the builder", repo Autonomous). The builder plans and runs ONE small goal. Conductor:
@@ -17,7 +17,7 @@ Owner: solo builder, phone only, free tiers only. Always deliver complete files,
 - tests/ (5 suites, `node tests/run-all.mjs`; tests/lib.mjs has a fake KV and helpers). package.json has "type":"module" (needed because src is several files).
 
 ## 3. Routes (Bearer AUTH_TOKEN; GET / is the page)
-POST /decompose {goal} -> plan_id + checked split; POST /job {plan_id, inputs, dry, allow_candidates}; GET /job/<id> (?full=1); POST /job/<id>/advance {steps<=3}; POST /job/<id>/resume; GET /jobs; GET /modules; POST /modules/import (reads the builder's recipes as candidate modules, never overwrites proof); GET /module/<id>; POST /module/<id>/status {status: candidate|proven|stale} (owner override).
+POST /decompose {goal} -> plan_id + checked split; POST /job {plan_id, inputs, dry, allow_candidates}; GET /job/<id> (?full=1); POST /job/<id>/advance {steps<=3}; POST /job/<id>/resume; GET /jobs; GET /modules; POST /modules/import (reads the builder's recipes as candidate modules, never overwrites proof); GET /builder/check (is BUILDER_URL / BUILDER_TOKEN right; explains 404, 401, unreachable; never shows the token); GET /module/<id>; POST /module/<id>/status {status: candidate|proven|stale} (owner override).
 
 ## 4. Environment
 Secrets: AUTH_TOKEN, BUILDER_URL (the builder's workers.dev address), BUILDER_TOKEN (the builder's AUTH_TOKEN), GROQ_API_KEY and/or OPENROUTER_API_KEY. KV namespace id goes in wrangler.toml.
@@ -46,3 +46,4 @@ Needs the builder to support `return_outputs: true` on /run and /recipe/<slug>/r
 
 ## 9. History
 - zip 1 (2026-10-09): everything above.
+- zip 2 (2026-10-09): "Import builder recipes" failed with a bare "HTTP 404" (BUILDER_URL pointed at the wrong place). BUILDER_URL is now cleaned (https:// added, paths dropped); import errors name the exact address and give a hint; new button/route Check builder connection. Test: builder-link.

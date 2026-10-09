@@ -67,7 +67,7 @@ export function moduleFromSubgoal(sg, planId, bp) {
 // Import every saved recipe of the builder as a candidate module. Existing modules (and their proof) are never overwritten.
 export async function importRecipes(env, b) {
   const list = await b.recipes();
-  if (!list.ok) return { ok: false, error: list.data?.error || `the builder answered HTTP ${list.status}` };
+  if (!list.ok) { const c = await b.check(); return { ok: false, error: `the builder answered HTTP ${list.status} at ${c.called}`, hint: c.hint, body: c.body }; }
   const added = [], kept = [], failed = [];
   for (const r of list.data.recipes || []) {
     const id = slug(r.slug);
