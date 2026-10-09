@@ -5,7 +5,7 @@ compatibility_date = "2025-01-01"
 # Create a NEW KV namespace for Conductor (Cloudflare dashboard -> Workers & Pages -> KV -> Create) and paste its id below.
 [[kv_namespaces]]
 binding = "CONDUCTOR"
-id = "PASTE-NEW-KV-NAMESPACE-ID-HERE"
+id = "07a65eb6b8844ed3a2cd1f3a7caaca01"
 
 [triggers]
 crons = ["*/5 * * * *"]
