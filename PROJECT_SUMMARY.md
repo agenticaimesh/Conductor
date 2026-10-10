@@ -1,6 +1,6 @@
 # Conductor - project handoff
 
-Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-10 (Conductor zip 5). Every Conductor-update.zip carries a refreshed copy of this file.
+Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-10 (Conductor zip 6). Every Conductor-update.zip carries a refreshed copy of this file.
 
 ## 1. What it is
 A SEPARATE Cloudflare Worker (free plan, KV binding CONDUCTOR, cron every 5 minutes) that sits above the existing Stack Builder worker ("the builder", repo Autonomous). The builder plans and runs ONE small goal. Conductor:
@@ -27,8 +27,10 @@ candidate -> proven only after 2 successful REAL runs with 2 DIFFERENT input set
 
 Side effects: a module whose `effects` list is not empty (it sends/posts/commits) is reused only for a sub-goal whose own title/does asks for such an action (findModules). The imported weather recipes end with an email, so they match "get the weather and email me", not "get the weather".
 
+Planning a new sub-goal (executor.planFor): the builder is asked to /plan it with the exact input names; the returned blueprint's inputs_needed is checked against the supplied values BEFORE running (a place name satisfies latitude/longitude); on a mismatch it is planned once more with the exact names and what was wrong, then fails with a message naming needed vs supplied. Failures that cannot fix themselves (missing values, unresolved wiring) are not retried; real service failures (HTTP codes) retry once.
+
 ## 6. Builder dependency
-Needs the builder to support `return_outputs: true` on /run and /recipe/<slug>/run (builder zip 17d or later). Without it modules cannot hand data to each other.
+Needs the builder to support `return_outputs: true` on /run and /recipe/<slug>/run (builder zip 17d or later; 17e or later for a plan that takes coordinates from a city). Without it modules cannot hand data to each other.
 
 ## 7. Honest limits
 - Unit-tested with mocked builder and LLM only. Never run live yet.
@@ -48,6 +50,7 @@ Needs the builder to support `return_outputs: true` on /run and /recipe/<slug>/r
 
 ## 9. History
 - zip 1 (2026-10-09): everything above.
+- zip 6 (2026-10-10): first live test: split and job creation worked; step 1 failed with "HTTP ?" because the builder's `error` text (a step refused before it ran) was not read. Now shown in full, with hint and missing list; plan inputs checked before running (one re-plan); no pointless retry. Test: first-live-failure. Needs builder zip 17e.
 - zip 5 (2026-10-10): import now works live (the earlier failures were a Cloudflare BUILD that failed and silently left the old version running: check Workers -> conductor -> Builds when an update seems to do nothing). Added the side-effect guard above.
 - zip 4 (2026-10-10): the owner still got the zip-1 error text after zips 2 and 3, i.e. the new code was NOT deployed (update workflow not run/failed, zip renamed by the phone, or Cloudflare build failed). Added: version shown on the page and in /builder/check; optional service binding BUILDER (src/builder.js uses it when present). Test: builder-link.
 - zip 3 (2026-10-09): the 404 was most likely Cloudflare error 1042 (a Worker cannot fetch another Worker of the same account via workers.dev). wrangler.toml now has compatibility_flags = ["global_fetch_strictly_public"]; the connection check names error 1042 and the fix; a stray character before https:// in BUILDER_URL is dropped. NOTE: unpack-update does not overwrite wrangler.toml, so this line must be added by hand once. (A service binding is the other fix; not used because a wrong service name would break the deploy.)

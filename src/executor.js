@@ -66,6 +66,44 @@ function extractOutputs(sg, data, job) {
   return { outputs: out };
 }
 
+// Inputs a fresh plan asks for that this sub-goal does not supply. A plan that wants coordinates is fine when a place name is
+// given: the builder looks the place up (builder zip 17e or later).
+const PLACE = /^(city|place|location|town)$/i, COORD = /^(lat|latitude|lon|lng|longitude)$/i;
+export function missingInputs(bp, vals) {
+  const has = (k) => vals[k] !== undefined && vals[k] !== null && vals[k] !== "";
+  const placeGiven = Object.keys(vals).some((k) => PLACE.test(k) && has(k));
+  return (bp?.inputs_needed || []).filter((k) => !has(k) && bp.defaults?.[k] == null && !(placeGiven && COORD.test(k)));
+}
+async function planFor(b, sg, vals, step) {
+  const names = Object.keys(vals).join(", "), want = (sg.outputs || []).map((o) => o.name).join(", ");
+  const goal = `${sg.does}. Use these input values: ${Object.entries(vals).map(([k, v]) => `${k}=${cut(typeof v === "string" ? v : JSON.stringify(v), 160)}`).join("; ")}. The result needed: ${want}.`;
+  let missing = [], bpNeeds = [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const notes = attempt === 1 ? `Name the inputs exactly: ${names}. These values change on every run: take them as inputs, never as fixed values.`
+      : `The plan MUST take only these inputs, with exactly these names: ${names}. Your previous plan wrongly needed: ${missing.join(", ")}. Do not add other inputs; if a service needs something else (for example coordinates for a city), use a step that finds it from the inputs above.`;
+    const p = await b.plan(goal, notes);
+    if (!p.ok || !p.data?.id) return { error: "the builder could not plan this sub-goal: " + cut(p.data?.error || p.data?.message || JSON.stringify(p.data), 220) };
+    if (p.data.status && p.data.status !== "ok") return { error: `the builder only produced a "${p.data.status}" plan for this sub-goal: ` + cut(p.data.message || p.data.summary || "", 220) };
+    missing = missingInputs(p.data.blueprint, vals); bpNeeds = p.data.blueprint?.inputs_needed || [];
+    step.plan_id = p.data.id;
+    if (!missing.length) return {};
+  }
+  step.plan_id = null; // a plan that cannot be fed is not kept
+  return { error: `the builder's plan for this sub-goal needs input(s) ${missing.join(", ")}, but only ${names || "nothing"} is supplied (the plan asks for: ${bpNeeds.join(", ")}). Planned twice with the exact input names and it still differs; make the sub-goal wording simpler or supply these as inputs.`, deterministic: true };
+}
+
+// The reason a run failed, from the builder's report: a step refused before it ran has "error" (and maybe "hint"); a step that
+// called a service has "status" and a preview. Earlier versions printed only "HTTP ?" for the first kind.
+function describeFailure(data) {
+  const bad = (data.report || []).find((r) => r.ok === false && !r.skipped);
+  const miss = Array.isArray(data.missing) && data.missing.length ? ` Missing: ${data.missing.join(", ")}.` : "";
+  if (!bad) return { text: `run ${data.status}.${miss}`, http: false };
+  const why = bad.error || bad.reason || bad.output_preview || "";
+  const code = bad.status ? `HTTP ${bad.status} ` : "";
+  return { text: `run ${data.status}: ${bad.node} (${bad.tool}) ${code}${cut(String(why), 260)}${bad.hint ? " | hint: " + cut(String(bad.hint), 160) : ""}${miss}`, http: !!bad.status,
+    deterministic: !bad.status && /missing (value|secret)|does not exist in|only a list of bare|refused|prompt contains/i.test(String(why)) };
+}
+
 async function runOnce(env, job, sg, step, vals) {
   const b = builder(env); let res;
   if (step.module) {
@@ -73,22 +111,15 @@ async function runOnce(env, job, sg, step, vals) {
     if (!m) return { error: `module ${step.module} no longer exists` };
     res = m.via.type === "recipe" ? await b.runRecipe(m.via.slug, vals, job.dry) : await b.run(m.via.id, vals, job.dry);
   } else {
-    if (!step.plan_id) {
-      const names = Object.keys(vals).join(", ");
-      const goal = `${sg.does}. Use these input values: ${Object.entries(vals).map(([k, v]) => `${k}=${cut(typeof v === "string" ? v : JSON.stringify(v), 160)}`).join("; ")}. The result needed: ${(sg.outputs || []).map((o) => o.name).join(", ")}.`;
-      const p = await b.plan(goal, `Name the inputs exactly: ${names}. These values change on every run: take them as inputs, never as fixed values.`);
-      if (!p.ok || !p.data?.id) return { error: "the builder could not plan this sub-goal: " + cut(p.data?.error || p.data?.message || JSON.stringify(p.data), 220) };
-      if (p.data.status && p.data.status !== "ok") return { error: `the builder only produced a "${p.data.status}" plan for this sub-goal: ` + cut(p.data.message || p.data.summary || "", 220) };
-      step.plan_id = p.data.id;
-    }
+    if (!step.plan_id) { const pl = await planFor(b, sg, vals, step); if (pl.error) return pl; }
     res = await b.run(step.plan_id, vals, job.dry);
   }
   if (!res.ok) return { error: `the builder answered HTTP ${res.status}: ${cut(res.data?.error || JSON.stringify(res.data), 220)}` };
   const st = res.data.status;
   if (st === "no_data") return { no_data: true, outputs: {} };
   if (st !== "ok" && st !== "dry_run_ok") {
-    const bad = (res.data.report || []).find((r) => r.ok === false && !r.skipped);
-    return { error: `run ${st}` + (bad ? `: ${bad.node} (${bad.tool}) HTTP ${bad.status || "?"} ${cut(String(bad.output_preview || bad.reason || ""), 160)}` : ""), failedRun: true };
+    const f = describeFailure(res.data);
+    return { error: f.text, failedRun: f.http, deterministic: !!f.deterministic }; // only a real service failure counts against a module
   }
   return extractOutputs(sg, res.data, job);
 }
@@ -131,7 +162,7 @@ export async function advance(env, jobId, { maxItems = 5 } = {}) {
     if (missing.length) fail(step, `missing input value(s): ${missing.join(", ")}`, true);
     else {
       const r = await runOnce(env, job, sg, step, vals);
-      if (r.error) { fail(step, r.error); if (r.failedRun) await learn(env, job, sg, step, vals, false); }
+      if (r.error) { fail(step, r.error, r.deterministic); if (r.failedRun) await learn(env, job, sg, step, vals, false); }
       else { step.status = "done"; step.error = null; step.no_data = !!r.no_data; step.output = r.outputs; await learn(env, job, sg, step, vals, true); }
     }
   } else {
@@ -145,7 +176,7 @@ export async function advance(env, jobId, { maxItems = 5 } = {}) {
         const { vals, missing } = gather(job, sg, items[step.items.length]);
         if (missing.length) { fail(step, `missing input value(s): ${missing.join(", ")}`, true); break; }
         const r = await runOnce(env, job, sg, step, vals);
-        if (r.error) { fail(step, `item ${step.items.length + 1} of ${items.length}: ${r.error}`); if (r.failedRun) await learn(env, job, sg, step, vals, false); break; }
+        if (r.error) { fail(step, `item ${step.items.length + 1} of ${items.length}: ${r.error}`, r.deterministic); if (r.failedRun) await learn(env, job, sg, step, vals, false); break; }
         step.items.push(r.no_data ? null : r.outputs); step.error = null; n++;
         await learn(env, job, sg, step, vals, true);
       }
