@@ -1,6 +1,7 @@
 name = "conductor"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
+compatibility_flags = ["global_fetch_strictly_public"]
 
 # Create a NEW KV namespace for Conductor (Cloudflare dashboard -> Workers & Pages -> KV -> Create) and paste its id below.
 [[kv_namespaces]]
