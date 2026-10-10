@@ -11,3 +11,9 @@ id = "PASTE-NEW-KV-NAMESPACE-ID-HERE"
 
 [triggers]
 crons = ["*/5 * * * *"]
+
+# OPTIONAL but recommended: reach the Stack Builder Worker directly. Replace autonomous with the builder Worker's name
+# (the first part of its workers.dev address). A wrong name makes the deploy fail, so check it first.
+# [[services]]
+# binding = "BUILDER"
+# service = "autonomous"

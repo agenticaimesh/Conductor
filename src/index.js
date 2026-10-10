@@ -1,7 +1,7 @@
 // Conductor: splits a big goal into small checked sub-goals, reuses proven modules, runs the rest through the Stack Builder
 // worker, and keeps every job's state so it can resume. Free plan: Cloudflare Worker + one KV namespace (binding CONDUCTOR).
 // Secrets: AUTH_TOKEN, BUILDER_URL, BUILDER_TOKEN, GROQ_API_KEY and/or OPENROUTER_API_KEY.
-import { J, uid } from "./util.js";
+import { J, uid, VERSION } from "./util.js";
 import { checkSplit } from "./contract.js";
 import { decompose } from "./decompose.js";
 import { builder } from "./builder.js";
@@ -10,7 +10,7 @@ import { createJob, advance, resume, advanceAll, getJob, viewJob } from "./execu
 
 const PAGE = `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>Conductor</title>
 <body style="font-family:system-ui;max-width:760px;margin:12px auto;padding:0 10px">
-<h2>Conductor</h2>
+<h2>Conductor <small style="font-weight:normal;font-size:13px;color:#666">${VERSION}</small></h2>
 <input id=t placeholder="AUTH_TOKEN" style="width:100%;padding:8px"><br><br>
 <textarea id=g rows=5 placeholder="Describe a big goal" style="width:100%;padding:8px"></textarea><br>
 <textarea id=iv rows=2 placeholder='Values, e.g. {"repo":"me/app"}' style="width:100%;padding:8px"></textarea><br>
@@ -85,7 +85,7 @@ export default {
         const m = await listModules(env);
         return J({ count: m.length, modules: m.map((x) => ({ id: x.id, status: x.status, does: x.does, inputs: x.inputs.map((i) => i.name), outputs: x.outputs.map((o) => o.name), effects: x.effects, proof: `${x.proof.ok_runs}/${x.proof.real_runs} ok, ${x.proof.ok_inputs.length} different inputs`, notes: x.notes })) });
       }
-      if (req.method === "GET" && u.pathname === "/builder/check") return J(await builder(env).check());
+      if (req.method === "GET" && u.pathname === "/builder/check") return J({ version: VERSION, ...(await builder(env).check()) });
       if (req.method === "POST" && u.pathname === "/modules/import") return J(await importRecipes(env, builder(env)));
       if (parts[0] === "module" && parts[1]) {
         const m = await getModule(env, parts[1]); if (!m) return J({ error: "module not found" }, 404);

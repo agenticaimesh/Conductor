@@ -1,3 +1,4 @@
+export const VERSION = "conductor-4";
 // Small shared helpers.
 export const J = (obj, status = 200) => new Response(JSON.stringify(obj, null, 2), { status, headers: { "content-type": "application/json" } });
 export const uid = (p = "") => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

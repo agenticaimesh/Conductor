@@ -5,10 +5,15 @@ export function builder(env) {
   const at = base.search(/https?:\/\//i); if (at > 0) base = base.slice(at); // stray characters typed before https:// are dropped
   if (base && !/^https?:\/\//i.test(base)) base = "https://" + base;
   try { base = new URL(base).origin; } catch { base = base.replace(/\/+$/, ""); } // only the address itself: a path pasted by mistake is dropped
+  // Best way to reach the builder: a Cloudflare SERVICE BINDING named BUILDER (wrangler.toml [[services]]). It needs no address, so it
+  // cannot hit the workers.dev "error 1042" 404 and cannot be mistyped. BUILDER_URL is only used when no binding exists.
+  const via = !!(env.BUILDER && typeof env.BUILDER.fetch === "function");
+  if (via) base = "https://builder.internal";
+  const send = via ? (u, init) => env.BUILDER.fetch(u, init) : (u, init) => fetch(u, init);
   const call = async (path, method = "GET", body) => {
     if (!base || !env.BUILDER_TOKEN) return { ok: false, status: 0, data: { error: "BUILDER_URL and BUILDER_TOKEN are not set on the Conductor worker" } };
     try {
-      const r = await fetch(base + path, { method, headers: { authorization: "Bearer " + env.BUILDER_TOKEN, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(150000) });
+      const r = await send(base + path, { method, headers: { authorization: "Bearer " + env.BUILDER_TOKEN, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(150000) });
       const text = await r.text(); let data; try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 500) }; }
       return { ok: r.ok, status: r.status, data, url: base + path };
     } catch (e) { return { ok: false, status: 0, data: { error: "could not reach the builder: " + e.message }, url: base + path }; }
@@ -18,9 +23,10 @@ export function builder(env) {
     const hint = r.ok ? "Connected: the builder answered and has " + (r.data?.count ?? "?") + " recipe(s)."
       : r.status === 401 ? "The builder answered but rejected the token: BUILDER_TOKEN must equal the builder's AUTH_TOKEN."
       : r.status === 404 && /1042/.test(String(r.data?.raw || "")) ? "Cloudflare error 1042: a Worker may not call another Worker on the same account through its workers.dev address unless the compatibility flag global_fetch_strictly_public is on. Your BUILDER_URL is probably RIGHT. Add this line to Conductor's wrangler.toml under compatibility_date, then let it redeploy: compatibility_flags = [\"global_fetch_strictly_public\"]"
+      : r.status === 404 && via ? "The service binding BUILDER answered 404 for /recipes. The binding points at a Worker that is not the Stack Builder (check the service name in wrangler.toml), or the builder is older than zip 17."
       : r.status === 404 ? "The address answered 404 for /recipes. BUILDER_URL probably points at the wrong worker (for example Conductor itself, or an old deployment). Open BUILDER_URL in a browser: it should show the Stack Builder page with the Plan button."
       : r.status === 0 ? "Could not connect: " + (r.data?.error || "") : "Unexpected answer from the builder.";
-    return { ok: r.ok, status: r.status, called: r.url, builder_host: base ? new URL(base).host : null, hint, body: r.ok ? undefined : JSON.stringify(r.data).slice(0, 300) };
+    return { ok: r.ok, status: r.status, called: r.url, builder_host: via ? "service binding BUILDER" : base ? new URL(base).host : null, via: via ? "service binding" : "BUILDER_URL", hint, body: r.ok ? undefined : JSON.stringify(r.data).slice(0, 300) };
   };
   return {
     check,

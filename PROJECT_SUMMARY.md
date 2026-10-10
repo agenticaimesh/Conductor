@@ -1,6 +1,6 @@
 # Conductor - project handoff
 
-Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-09 (Conductor zip 3). Every Conductor-update.zip carries a refreshed copy of this file.
+Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-10 (Conductor zip 4). Every Conductor-update.zip carries a refreshed copy of this file.
 
 ## 1. What it is
 A SEPARATE Cloudflare Worker (free plan, KV binding CONDUCTOR, cron every 5 minutes) that sits above the existing Stack Builder worker ("the builder", repo Autonomous). The builder plans and runs ONE small goal. Conductor:
@@ -20,7 +20,7 @@ Owner: solo builder, phone only, free tiers only. Always deliver complete files,
 POST /decompose {goal} -> plan_id + checked split; POST /job {plan_id, inputs, dry, allow_candidates}; GET /job/<id> (?full=1); POST /job/<id>/advance {steps<=3}; POST /job/<id>/resume; GET /jobs; GET /modules; POST /modules/import (reads the builder's recipes as candidate modules, never overwrites proof); GET /builder/check (is BUILDER_URL / BUILDER_TOKEN right; explains 404, 401, unreachable; never shows the token); GET /module/<id>; POST /module/<id>/status {status: candidate|proven|stale} (owner override).
 
 ## 4. Environment
-Secrets: AUTH_TOKEN, BUILDER_URL (the builder's workers.dev address), BUILDER_TOKEN (the builder's AUTH_TOKEN), GROQ_API_KEY and/or OPENROUTER_API_KEY. KV namespace id goes in wrangler.toml.
+Secrets: AUTH_TOKEN, BUILDER_URL (the builder's workers.dev address; not needed when the service binding below exists), BUILDER_TOKEN (the builder's AUTH_TOKEN), GROQ_API_KEY and/or OPENROUTER_API_KEY. KV namespace id goes in wrangler.toml. Preferred way to reach the builder: a service binding in wrangler.toml, `[[services]] binding = "BUILDER" service = "<the builder Worker's name>"` (the name is the first part of its workers.dev address); it avoids Cloudflare error 1042 and typos in BUILDER_URL. BUILDER_TOKEN is still needed. The page heading shows the deployed version (VERSION in src/util.js): if it is older than the latest zip, the update did not deploy.
 
 ## 5. Module rules
 candidate -> proven only after 2 successful REAL runs with 2 DIFFERENT input sets; proven -> stale after 2 failures in a row; stale -> candidate on the next success. Dry runs never count and never create modules. Imported recipes start as candidates with a GUESSED output contract (text) and are flagged; the owner can mark one proven after checking it. A module wraps a builder recipe (via.type recipe) or plan (via.type plan).
@@ -46,5 +46,6 @@ Needs the builder to support `return_outputs: true` on /run and /recipe/<slug>/r
 
 ## 9. History
 - zip 1 (2026-10-09): everything above.
+- zip 4 (2026-10-10): the owner still got the zip-1 error text after zips 2 and 3, i.e. the new code was NOT deployed (update workflow not run/failed, zip renamed by the phone, or Cloudflare build failed). Added: version shown on the page and in /builder/check; optional service binding BUILDER (src/builder.js uses it when present). Test: builder-link.
 - zip 3 (2026-10-09): the 404 was most likely Cloudflare error 1042 (a Worker cannot fetch another Worker of the same account via workers.dev). wrangler.toml now has compatibility_flags = ["global_fetch_strictly_public"]; the connection check names error 1042 and the fix; a stray character before https:// in BUILDER_URL is dropped. NOTE: unpack-update does not overwrite wrangler.toml, so this line must be added by hand once. (A service binding is the other fix; not used because a wrong service name would break the deploy.)
 - zip 2 (2026-10-09): "Import builder recipes" failed with a bare "HTTP 404" (BUILDER_URL pointed at the wrong place). BUILDER_URL is now cleaned (https:// added, paths dropped); import errors name the exact address and give a hint; new button/route Check builder connection. Test: builder-link.

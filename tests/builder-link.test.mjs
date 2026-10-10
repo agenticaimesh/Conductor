@@ -18,4 +18,14 @@ reply = () => new Response("error code: 1042", { status: 404 }); c = await build
 ok(c.status === 404 && /1042/.test(c.hint) && /global_fetch_strictly_public/.test(c.hint) && /probably RIGHT/.test(c.hint), "Cloudflare error 1042 (Worker calling a Worker on the same account) is named, with the one-line fix");
 seen = []; await builder({ ...env, BUILDER_URL: "ihttps://autonomous.agenticmesh-fdb.workers.dev" }).check();
 ok(seen[0] === "https://autonomous.agenticmesh-fdb.workers.dev/recipes", "a stray character before https:// is dropped");
+// service binding: no address involved, global fetch must never be used
+globalThis.fetch = async () => { throw new Error("global fetch must not be used when a service binding exists"); };
+let boundUrl = "";
+const bound = { ...env, BUILDER_URL: "", BUILDER: { fetch: async (u) => { boundUrl = String(u); return R({ count: 2, recipes: [{ slug: "weather-morning" }] }); } } };
+c = await builder(bound).check();
+ok(c.ok && c.via === "service binding" && boundUrl.endsWith("/recipes") && /Connected/.test(c.hint), "a service binding BUILDER reaches the builder without BUILDER_URL or global fetch");
+const bad = { ...bound, BUILDER: { fetch: async () => R({ error: "x" }, 404) } };
+c = await builder(bad).check(); ok(c.status === 404 && /service binding BUILDER answered 404/.test(c.hint), "a 404 through the binding says the bound Worker is the wrong one");
+const page = await (await (await import("./lib.mjs")).worker.fetch(new Request("https://c/"), env)).text();
+ok(/conductor-\d+/.test(page), "the page shows its version so you can tell which code is deployed");
 done();
