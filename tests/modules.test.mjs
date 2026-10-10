@@ -17,12 +17,14 @@ ok(m.fixed_values.some((x) => x.includes("latitude")) && m.notes.some((n) => /gu
 m.proof.ok_runs = 5; await putModule(env, m);
 r = await importRecipes(env, b); ok(r.kept.includes("weather-morning") && (await getModule(env, "weather-morning")).proof.ok_runs === 5, "a second import never overwrites existing proof");
 
-const sg = { title: "Get weather", does: "get the weather forecast for a city and write one sentence", inputs: [{ name: "city", type: "string", from: "user.city" }], outputs: [{ name: "text", type: "string" }] };
+const sg = { title: "Get weather and email it", does: "get the weather forecast for a city, write one sentence and email it", inputs: [{ name: "city", type: "string", from: "user.city" }], outputs: [{ name: "text", type: "string" }] };
 const mods = [{ ...m, status: "proven" }, { id: "gh", status: "proven", does: "list github issues for a repository", tags: ["github"], inputs: [{ name: "repo", required: true, type: "string" }], outputs: [{ name: "issues", type: "list" }], proof: {} }];
 let f = findModules(mods, sg);
 ok(f[0]?.id === "weather-morning" && !f.some((x) => x.id === "gh"), "lookup picks the weather module and not the github one");
 ok(findModules([{ ...m, status: "candidate" }], sg).length === 0 && findModules([{ ...m, status: "candidate" }], sg, { includeCandidates: true }).length === 1, "candidates are used only when asked");
 ok(findModules([{ ...m, status: "stale" }], sg, { includeCandidates: true }).length === 0, "stale modules are never offered");
+const readOnly = { title: "Get weather", does: "get the weather forecast for a city and write one sentence", inputs: [{ name: "city", type: "string", from: "user.city" }], outputs: [{ name: "text", type: "string" }] };
+ok(findModules(mods, readOnly).length === 0, "a module that sends an email is NOT reused for a sub-goal that only reads (no accidental emails)");
 const need = { ...sg, inputs: [], outputs: [{ name: "report", type: "string" }] };
 ok((findModules(mods, sg)[0]?.score || 0) > (findModules(mods, need)[0]?.score || 0), "matching output names raises the score");
 

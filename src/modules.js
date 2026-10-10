@@ -87,9 +87,15 @@ export function findModules(modules, sg, { includeCandidates = false } = {}) {
   const want = wordSet(sg.title + " " + sg.does);
   const outNames = new Set((sg.outputs || []).map((o) => o.name));
   const scored = [];
+  // A module that DOES something to the outside world (sends an email, posts, commits...)
+  // (kept narrow on purpose: wrongly skipping a module only costs a fresh plan, wrongly reusing one that emails costs a surprise email;
+  // so "write", "create", "open", "update" are NOT in the list - a language model also "writes" a sentence) is only reused for a sub-goal that itself
+  // asks for such an action. Otherwise a "get the weather" step could silently reuse a recipe that also emails you.
+  const asksForAction = /\b(send|sends|email|e-mail|mail|post|notify|message|slack|publish|commit|push|deploy|delete|submit|upload|pay|buy)\b/i.test(`${sg.title} ${sg.does}`);
   for (const m of modules) {
     if (m.status === "stale") continue;
     if (m.status === "candidate" && !includeCandidates) continue;
+    if ((m.effects || []).length && !asksForAction) continue;
     const have = wordSet(m.does + " " + (m.tags || []).join(" "));
     let hit = 0; for (const w of want) if (have.has(w)) hit++;
     let score = want.size ? hit / Math.sqrt(want.size * Math.max(1, have.size)) : 0;
