@@ -1,6 +1,8 @@
 name = "conductor"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
+# Lets this Worker call the Stack Builder Worker on the same account through its workers.dev address (otherwise Cloudflare answers 404, error 1042).
+compatibility_flags = ["global_fetch_strictly_public"]
 
 # Create a NEW KV namespace for Conductor (Cloudflare dashboard -> Workers & Pages -> KV -> Create) and paste its id below.
 [[kv_namespaces]]

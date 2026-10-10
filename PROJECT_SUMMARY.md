@@ -1,6 +1,6 @@
 # Conductor - project handoff
 
-Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-09 (Conductor zip 2). Every Conductor-update.zip carries a refreshed copy of this file.
+Give this file and the src/ and tests/ folders to any LLM to continue. Last updated: 2026-10-09 (Conductor zip 3). Every Conductor-update.zip carries a refreshed copy of this file.
 
 ## 1. What it is
 A SEPARATE Cloudflare Worker (free plan, KV binding CONDUCTOR, cron every 5 minutes) that sits above the existing Stack Builder worker ("the builder", repo Autonomous). The builder plans and runs ONE small goal. Conductor:
@@ -46,4 +46,5 @@ Needs the builder to support `return_outputs: true` on /run and /recipe/<slug>/r
 
 ## 9. History
 - zip 1 (2026-10-09): everything above.
+- zip 3 (2026-10-09): the 404 was most likely Cloudflare error 1042 (a Worker cannot fetch another Worker of the same account via workers.dev). wrangler.toml now has compatibility_flags = ["global_fetch_strictly_public"]; the connection check names error 1042 and the fix; a stray character before https:// in BUILDER_URL is dropped. NOTE: unpack-update does not overwrite wrangler.toml, so this line must be added by hand once. (A service binding is the other fix; not used because a wrong service name would break the deploy.)
 - zip 2 (2026-10-09): "Import builder recipes" failed with a bare "HTTP 404" (BUILDER_URL pointed at the wrong place). BUILDER_URL is now cleaned (https:// added, paths dropped); import errors name the exact address and give a hint; new button/route Check builder connection. Test: builder-link.

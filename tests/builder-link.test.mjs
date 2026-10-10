@@ -14,4 +14,8 @@ ok(!r.ok && /404 at https:\/\/stack-builder\.me\.workers\.dev\/recipes/.test(r.e
 reply = () => R({ error: "wrong token" }, 401); c = await builder(env).check(); ok(/rejected the token/.test(c.hint), "401 says the token is wrong");
 reply = () => R({ count: 2, recipes: [] }); c = await builder(env).check(); ok(c.ok && /Connected/.test(c.hint), "success says connected");
 const x = await call(env, "/builder/check"); ok(x.d.ok === true && x.d.builder_host === "stack-builder.me.workers.dev", "GET /builder/check works through the route");
+reply = () => new Response("error code: 1042", { status: 404 }); c = await builder(env).check();
+ok(c.status === 404 && /1042/.test(c.hint) && /global_fetch_strictly_public/.test(c.hint) && /probably RIGHT/.test(c.hint), "Cloudflare error 1042 (Worker calling a Worker on the same account) is named, with the one-line fix");
+seen = []; await builder({ ...env, BUILDER_URL: "ihttps://autonomous.agenticmesh-fdb.workers.dev" }).check();
+ok(seen[0] === "https://autonomous.agenticmesh-fdb.workers.dev/recipes", "a stray character before https:// is dropped");
 done();
